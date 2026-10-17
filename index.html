@@ -1,0 +1,435 @@
+<!doctype html>
+<html lang="zh-Hant-TW">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="description" content="日日記帳：記錄餐飲、交通、水電、購物等日常開銷">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<meta name="apple-mobile-web-app-title" content="日日記帳">
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="icon" type="image/png" sizes="192x192" href="icons/icon-192.png">
+<link rel="apple-touch-icon" href="icons/apple-touch-icon.png">
+<style>
+:root{color-scheme:light;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}
+html,body{margin:0;min-height:100%}
+[hidden]{display:none!important}
+input,textarea{-webkit-appearance:none;appearance:none}
+input[type="date"]{min-height:44px}
+</style>
+<title>日日記帳</title>
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="theme-color" content="#F2F5F3">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Noto+Sans+TC:wght@400;500;700;900&family=JetBrains+Mono:wght@500;700&display=swap">
+<style>
+/* Layout: one narrow ledger column — month summary, category split, then day-grouped entries; add via bottom sheet */
+:root{
+  --bg:#F2F5F3; --surface:#FFFFFF; --ink:#15211E; --muted:#66736F; --line:#DCE3E0;
+  --accent:#0E7A68; --accent-ink:#FFFFFF; --warn:#C2410C; --chip:#E7EDEA;
+  --c-food:#E0803A; --c-traffic:#2F7FC1; --c-utility:#1F9E8A; --c-shop:#C2487A;
+  --c-home:#8A6BBE; --c-med:#D14B4B; --c-fun:#C9A227; --c-other:#7C8A86;
+  --f-body:"Noto Sans TC","PingFang TC","Microsoft JhengHei",system-ui,sans-serif;
+  --f-num:"JetBrains Mono",ui-monospace,"SF Mono",Menlo,monospace;
+}
+@media (prefers-color-scheme: dark){:root:not([data-theme="light"]){
+  --bg:#0F1614; --surface:#18221F; --ink:#E6EEEB; --muted:#93A29D; --line:#2A3632;
+  --accent:#3CC2A8; --accent-ink:#06201A; --warn:#F08A4B; --chip:#22302C; color-scheme:dark}}
+:root[data-theme="dark"]{
+  --bg:#0F1614; --surface:#18221F; --ink:#E6EEEB; --muted:#93A29D; --line:#2A3632;
+  --accent:#3CC2A8; --accent-ink:#06201A; --warn:#F08A4B; --chip:#22302C; color-scheme:dark}
+*{box-sizing:border-box}
+html,body{background:var(--bg);color:var(--ink)}
+body{font-family:var(--f-body);font-size:15px;line-height:1.5;-webkit-tap-highlight-color:transparent}
+.wrap{max-width:560px;margin:0 auto;padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px));padding-block:12px 120px;display:flex;flex-direction:column;gap:18px}
+button{font:inherit;color:inherit;cursor:pointer}
+button:focus-visible,input:focus-visible,textarea:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+.num{font-family:var(--f-num);font-variant-numeric:tabular-nums}
+
+header{display:flex;align-items:center;justify-content:space-between;gap:8px}
+.month{display:flex;align-items:center;gap:4px}
+.month h1{font-size:19px;font-weight:700;margin:0;min-width:7.5em;text-align:center}
+.ib{background:none;border:0;width:40px;height:40px;border-radius:50%;display:grid;place-items:center;color:var(--muted)}
+.ib:active{background:var(--chip)}
+.ib svg{width:22px;height:22px}
+
+.summary{display:flex;flex-direction:column;gap:10px}
+.label{font-size:12px;letter-spacing:.08em;color:var(--muted);font-weight:500}
+.total{font-size:40px;font-weight:700;letter-spacing:-.02em;line-height:1.1}
+.total small{font-size:18px;color:var(--muted);margin-right:4px;font-weight:500}
+.budget{display:flex;flex-direction:column;gap:6px}
+.track{height:8px;background:var(--chip);border-radius:4px;overflow:hidden}
+.track>i{display:block;height:100%;background:var(--accent);border-radius:4px;transition:width .3s}
+.track.over>i{background:var(--warn)}
+.bmeta{display:flex;justify-content:space-between;font-size:13px;color:var(--muted)}
+.bmeta b{color:var(--ink);font-weight:500}
+.bmeta .over{color:var(--warn)}
+.stats{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;font-size:13px;color:var(--muted)}
+.stats div{display:flex;flex-direction:column}
+.stats .num{color:var(--ink);font-size:15px}
+
+.split{background:var(--surface);border:1px solid var(--line);border-radius:14px;padding:16px;display:flex;flex-direction:column;gap:12px}
+.stack{display:flex;height:14px;border-radius:7px;overflow:hidden;background:var(--chip);gap:2px}
+.stack i{display:block;height:100%}
+.cats{display:grid;grid-template-columns:1fr 1fr;gap:6px 16px}
+.cat{display:flex;align-items:center;gap:8px;font-size:14px;min-width:0;background:none;border:0;padding:4px 0;text-align:left;border-radius:6px}
+.cat.on{background:var(--chip);padding-inline:6px}
+.dot{width:10px;height:10px;border-radius:3px;flex:none}
+.cat .n{flex:1;min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.cat .num{font-size:13px}
+.cat .pct{color:var(--muted);font-size:12px;width:3em;text-align:right}
+
+.example{display:flex;align-items:center;justify-content:space-between;gap:10px;font-size:13px;padding:10px 12px;border:1px dashed var(--accent);border-radius:10px;color:var(--muted)}
+.example button{background:none;border:0;color:var(--accent);font-weight:700;white-space:nowrap}
+
+.filter{display:flex;align-items:center;justify-content:space-between;font-size:13px;color:var(--muted)}
+.filter button{background:none;border:0;color:var(--accent);font-weight:500}
+.day{display:flex;flex-direction:column}
+.dayh{display:flex;justify-content:space-between;align-items:baseline;font-size:13px;color:var(--muted);padding:6px 2px;border-bottom:1px solid var(--line)}
+.row{display:flex;align-items:center;gap:12px;padding:12px 2px;border:0;border-bottom:1px solid var(--line);background:none;text-align:left;width:100%}
+.row:active{background:var(--chip)}
+.badge{width:36px;height:36px;border-radius:10px;display:grid;place-items:center;font-size:15px;font-weight:700;color:#fff;flex:none}
+.row .t{flex:1;min-width:0;display:flex;flex-direction:column}
+.row .t b{font-weight:500}
+.row .t span{font-size:12px;color:var(--muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.row .num{font-size:16px;font-weight:700}
+.empty{text-align:center;color:var(--muted);padding:40px 0;font-size:14px}
+
+.fab{position:fixed;right:max(20px,calc(env(safe-area-inset-right,0px) + 20px));bottom:calc(env(safe-area-inset-bottom,0px) + 24px);height:56px;padding:0 22px;border-radius:28px;border:0;background:var(--accent);color:var(--accent-ink);font-weight:700;font-size:16px;display:flex;align-items:center;gap:6px;box-shadow:0 6px 20px rgba(14,122,104,.35);z-index:5}
+.fab svg{width:20px;height:20px}
+
+.scrim{position:fixed;inset:0;background:rgba(10,20,18,.45);z-index:20;display:flex;align-items:flex-end;justify-content:center}
+.sheet{background:var(--surface);width:100%;max-width:560px;border-radius:18px 18px 0 0;padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px));padding-block:10px calc(env(safe-area-inset-bottom,0px) + 18px);display:flex;flex-direction:column;gap:14px;max-height:92%;overflow-y:auto;animation:up .22s ease-out}
+@keyframes up{from{transform:translateY(40px);opacity:.6}}
+@media (prefers-reduced-motion:reduce){.sheet{animation:none}.track>i{transition:none}}
+.grab{width:40px;height:4px;border-radius:2px;background:var(--line);align-self:center}
+.sheet h2{margin:0;font-size:17px;display:flex;justify-content:space-between;align-items:center}
+.amt{display:flex;align-items:baseline;gap:6px;border-bottom:2px solid var(--accent);padding-bottom:4px}
+.amt span{font-size:20px;color:var(--muted)}
+.amt input{flex:1;min-width:0;border:0;background:none;color:var(--ink);font-family:var(--f-num);font-size:36px;font-weight:700;outline:none;padding:0}
+.picks{display:grid;grid-template-columns:repeat(4,1fr);gap:8px}
+.pick{border:1.5px solid var(--line);background:var(--surface);border-radius:12px;padding:10px 4px;display:flex;flex-direction:column;align-items:center;gap:4px;font-size:13px}
+.pick .badge{width:30px;height:30px;font-size:13px;border-radius:8px}
+.pick[aria-pressed="true"]{border-color:var(--accent);background:var(--chip)}
+.fields{display:grid;grid-template-columns:auto 1fr;gap:10px 12px;align-items:center;font-size:14px}
+.fields label{color:var(--muted)}
+.fields input,.ta{width:100%;min-width:0;border:1px solid var(--line);background:var(--bg);color:var(--ink);border-radius:10px;padding:10px 12px;font:inherit;font-size:16px}
+.ta{min-height:110px;font-family:var(--f-num);font-size:12px}
+.acts{display:flex;gap:10px}
+.btn{flex:1;height:48px;border-radius:12px;border:1px solid var(--line);background:var(--surface);font-weight:700}
+.btn.primary{background:var(--accent);color:var(--accent-ink);border-color:var(--accent)}
+.btn.danger{color:var(--warn);border-color:var(--warn)}
+.err{color:var(--warn);font-size:13px;min-height:1em;margin:-6px 0 0}
+.hint{font-size:12px;color:var(--muted);margin:0}
+.toast{position:fixed;left:50%;bottom:calc(env(safe-area-inset-bottom,0px) + 96px);transform:translateX(-50%);background:var(--ink);color:var(--bg);padding:8px 16px;border-radius:20px;font-size:14px;z-index:30}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <div class="month">
+      <button class="ib" id="prev" aria-label="上個月"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M15 6l-6 6 6 6"/></svg></button>
+      <h1 id="mtitle"></h1>
+      <button class="ib" id="next" aria-label="下個月"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 6l6 6-6 6"/></svg></button>
+    </div>
+    <button class="ib" id="openSet" aria-label="設定"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.7 1.7 0 0 0 .3 1.8l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-1.8-.3 1.7 1.7 0 0 0-1 1.5V21a2 2 0 1 1-4 0v-.1a1.7 1.7 0 0 0-1.1-1.5 1.7 1.7 0 0 0-1.8.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.7 1.7 0 0 0 .3-1.8 1.7 1.7 0 0 0-1.5-1H3a2 2 0 1 1 0-4h.1a1.7 1.7 0 0 0 1.5-1.1 1.7 1.7 0 0 0-.3-1.8l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.7 1.7 0 0 0 1.8.3H9a1.7 1.7 0 0 0 1-1.5V3a2 2 0 1 1 4 0v.1a1.7 1.7 0 0 0 1 1.5 1.7 1.7 0 0 0 1.8-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.7 1.7 0 0 0-.3 1.8V9a1.7 1.7 0 0 0 1.5 1H21a2 2 0 1 1 0 4h-.1a1.7 1.7 0 0 0-1.5 1z"/></svg></button>
+  </header>
+
+  <section class="summary">
+    <span class="label">本月支出</span>
+    <div class="total num"><small>NT$</small><span id="total">0</span></div>
+    <div class="budget" id="budgetBox">
+      <div class="track" id="track"><i id="bar"></i></div>
+      <div class="bmeta"><span id="bLeft"></span><span id="bOf"></span></div>
+    </div>
+    <div class="stats">
+      <div>筆數<span class="num" id="sCount">0</span></div>
+      <div>日均<span class="num" id="sAvg">0</span></div>
+      <div>較上月<span class="num" id="sDiff">—</span></div>
+    </div>
+  </section>
+
+  <div class="example" id="exBanner" hidden>
+    <span>目前顯示的是範例資料</span>
+    <button id="clearEx">清除範例</button>
+  </div>
+
+  <section class="split" id="split">
+    <div class="stack" id="stack"></div>
+    <div class="cats" id="cats"></div>
+  </section>
+
+  <div class="filter" id="filterBar" hidden><span id="filterTxt"></span><button id="clearFilter">顯示全部</button></div>
+  <section id="list"></section>
+</div>
+
+<button class="fab" id="add"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M12 5v14M5 12h14"/></svg>記一筆</button>
+
+<!-- Entry sheet -->
+<div class="scrim" id="entryScrim" hidden>
+  <form class="sheet" id="entryForm" novalidate>
+    <div class="grab"></div>
+    <h2><span id="entryTitle">記一筆</span><button type="button" class="ib" id="closeEntry" aria-label="關閉"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M6 6l12 12M18 6L6 18"/></svg></button></h2>
+    <div class="amt"><span>NT$</span><input id="fAmt" inputmode="decimal" autocomplete="off" placeholder="0" aria-label="金額"></div>
+    <div class="picks" id="fCats"></div>
+    <div class="fields">
+      <label for="fDate">日期</label><input type="date" id="fDate">
+      <label for="fNote">備註</label><input id="fNote" placeholder="例：7-11 早餐、台電 9-10月" maxlength="40">
+    </div>
+    <p class="err" id="fErr"></p>
+    <div class="acts">
+      <button type="button" class="btn danger" id="fDel" hidden>刪除</button>
+      <button type="submit" class="btn primary">儲存</button>
+    </div>
+  </form>
+</div>
+
+<!-- Settings sheet -->
+<div class="scrim" id="setScrim" hidden>
+  <div class="sheet">
+    <div class="grab"></div>
+    <h2>設定<button type="button" class="ib" id="closeSet" aria-label="關閉"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M6 6l12 12M18 6L6 18"/></svg></button></h2>
+    <div class="fields">
+      <label for="sBudget">每月預算</label><input id="sBudget" inputmode="numeric" placeholder="不設定請留空">
+    </div>
+    <div class="acts"><button class="btn primary" id="saveBudget">儲存預算</button></div>
+    <span class="label">備份與還原</span>
+    <p class="hint">資料只存在這台裝置的瀏覽器裡。換手機或清除瀏覽資料前，請先複製備份，貼到記事本保存。</p>
+    <textarea class="ta" id="io" aria-label="備份資料" placeholder="按「複製備份」產生資料，或貼上先前備份的內容後按「匯入」"></textarea>
+    <div class="acts">
+      <button class="btn" id="exportBtn">複製備份</button>
+      <button class="btn" id="importBtn">匯入</button>
+    </div>
+    <div class="acts"><button class="btn" id="csvBtn">複製本月 CSV</button></div>
+    <div class="acts"><button class="btn danger" id="wipeBtn">刪除全部資料</button></div>
+  </div>
+</div>
+
+<div class="toast" id="toast" hidden></div>
+
+<script>
+(function(){
+'use strict';
+var CATS=[
+  {id:'food',n:'餐飲',c:'--c-food'},{id:'traffic',n:'交通',c:'--c-traffic'},
+  {id:'utility',n:'水電',c:'--c-utility'},{id:'shop',n:'購物',c:'--c-shop'},
+  {id:'home',n:'居家',c:'--c-home'},{id:'med',n:'醫療',c:'--c-med'},
+  {id:'fun',n:'娛樂',c:'--c-fun'},{id:'other',n:'其他',c:'--c-other'}
+];
+var CMAP={};CATS.forEach(function(c){CMAP[c.id]=c});
+var KEY='ririjizhang.v1';
+var $=function(id){return document.getElementById(id)};
+
+function pad(n){return (n<10?'0':'')+n}
+function ymd(d){return d.getFullYear()+'-'+pad(d.getMonth()+1)+'-'+pad(d.getDate())}
+function fmt(n){return Math.round(n).toLocaleString('en-US')}
+function uid(){return Date.now().toString(36)+Math.random().toString(36).slice(2,7)}
+
+var today=new Date();
+var view={y:today.getFullYear(),m:today.getMonth()};
+var filter=null, editing=null;
+
+function sample(){
+  var y=today.getFullYear(),m=today.getMonth(),d=today.getDate();
+  var rows=[
+    [1,'utility',1286,'台電 9-10月電費'],[1,'traffic',1280,'TPASS 月票'],
+    [2,'food',95,'早餐 蛋餅豆漿'],[3,'shop',689,'全聯 日用品'],
+    [4,'food',320,'午餐 便當＋飲料'],[5,'utility',412,'自來水 兩期'],
+    [6,'fun',380,'電影票'],[7,'food',1150,'家庭聚餐'],
+    [8,'traffic',220,'Uber'],[9,'utility',599,'中華電信 光世代'],
+    [10,'med',150,'診所掛號'],[11,'home',890,'IKEA 收納盒'],
+    [12,'food',160,'晚餐 牛肉麵'],[13,'traffic',1050,'加油 95'],
+    [14,'shop',1290,'momo 耳機'],[15,'food',85,'咖啡'],[16,'utility',380,'天然氣']
+  ];
+  var out=[];
+  rows.forEach(function(r){
+    if(r[0]>d) return;
+    out.push({id:uid(),amt:r[2],cat:r[1],date:ymd(new Date(y,m,r[0])),note:r[3],ex:1});
+  });
+  // a few last-month rows for comparison
+  [[3,'utility',1190,'台電'],[8,'food',2430,'聚餐'],[15,'traffic',1280,'TPASS 月票'],[20,'shop',2650,'衣服']].forEach(function(r){
+    out.push({id:uid(),amt:r[2],cat:r[1],date:ymd(new Date(y,m-1,r[0])),note:r[3],ex:1});
+  });
+  return out;
+}
+
+var state={items:[],budget:20000};
+function load(){
+  try{
+    var raw=localStorage.getItem(KEY);
+    if(raw){var s=JSON.parse(raw); if(s&&Array.isArray(s.items)){state=s;return}}
+  }catch(e){}
+  state={items:sample(),budget:20000};
+}
+function save(){try{localStorage.setItem(KEY,JSON.stringify(state))}catch(e){}}
+
+function monthKey(y,m){return y+'-'+pad(m+1)}
+function itemsOf(y,m){var k=monthKey(y,m);return state.items.filter(function(i){return i.date.slice(0,7)===k})}
+function cssv(v){return getComputedStyle(document.documentElement).getPropertyValue(v).trim()}
+
+function render(){
+  $('mtitle').textContent=view.y+' 年 '+(view.m+1)+' 月';
+  var items=itemsOf(view.y,view.m);
+  var total=items.reduce(function(s,i){return s+i.amt},0);
+  $('total').textContent=fmt(total);
+
+  // budget
+  var b=+state.budget||0;
+  $('budgetBox').hidden=!b;
+  if(b){
+    var pct=Math.min(100,total/b*100);
+    $('bar').style.width=pct+'%';
+    $('track').classList.toggle('over',total>b);
+    var left=b-total;
+    $('bLeft').innerHTML=left>=0?'剩餘 <b class="num">'+fmt(left)+'</b>':'<span class="over">超支 <b class="num" style="color:inherit">'+fmt(-left)+'</b></span>';
+    $('bOf').innerHTML='預算 <span class="num">'+fmt(b)+'</span>';
+  }
+
+  // stats
+  var isCur=view.y===today.getFullYear()&&view.m===today.getMonth();
+  var days=isCur?today.getDate():new Date(view.y,view.m+1,0).getDate();
+  $('sCount').textContent=items.length;
+  $('sAvg').textContent=fmt(items.length?total/days:0);
+  var pm=new Date(view.y,view.m-1,1);
+  var prev=itemsOf(pm.getFullYear(),pm.getMonth()).reduce(function(s,i){return s+i.amt},0);
+  var dEl=$('sDiff');
+  if(prev){var d=total-prev;dEl.textContent=(d>0?'+':d<0?'−':'')+fmt(Math.abs(d));dEl.style.color=d>0?'var(--warn)':'var(--accent)'}
+  else{dEl.textContent='—';dEl.style.color=''}
+
+  $('exBanner').hidden=!state.items.some(function(i){return i.ex});
+
+  // category split
+  var byCat={};items.forEach(function(i){byCat[i.cat]=(byCat[i.cat]||0)+i.amt});
+  var sorted=CATS.slice().sort(function(a,b){return (byCat[b.id]||0)-(byCat[a.id]||0)});
+  $('split').hidden=!total;
+  $('stack').innerHTML=sorted.filter(function(c){return byCat[c.id]}).map(function(c){
+    return '<i style="width:'+(byCat[c.id]/total*100)+'%;background:var('+c.c+')" title="'+c.n+'"></i>'}).join('');
+  $('cats').innerHTML=sorted.filter(function(c){return byCat[c.id]}).map(function(c){
+    return '<button class="cat'+(filter===c.id?' on':'')+'" data-cat="'+c.id+'"><span class="dot" style="background:var('+c.c+')"></span><span class="n">'+c.n+'</span><span class="num">'+fmt(byCat[c.id])+'</span><span class="pct num">'+Math.round(byCat[c.id]/total*100)+'%</span></button>'}).join('');
+
+  // filter bar
+  $('filterBar').hidden=!filter;
+  if(filter){var ft=items.filter(function(i){return i.cat===filter});$('filterTxt').textContent='只看「'+CMAP[filter].n+'」 · '+ft.length+' 筆'}
+
+  // list
+  var shown=filter?items.filter(function(i){return i.cat===filter}):items;
+  shown.sort(function(a,b){return a.date<b.date?1:a.date>b.date?-1:(b.ts||0)-(a.ts||0)});
+  if(!shown.length){$('list').innerHTML='<div class="empty">這個月還沒有記錄<br>按右下角「記一筆」開始</div>';return}
+  var wk='日一二三四五六',html='',cur=null,buf=[],sum=0;
+  function flush(){
+    if(!cur)return;
+    var dt=new Date(cur+'T00:00:00');
+    html+='<div class="day"><div class="dayh"><span>'+(dt.getMonth()+1)+'/'+dt.getDate()+'（'+wk[dt.getDay()]+'）'+(cur===ymd(today)?' · 今天':'')+'</span><span class="num">'+fmt(sum)+'</span></div>'+buf.join('')+'</div>';
+  }
+  shown.forEach(function(i){
+    if(i.date!==cur){flush();cur=i.date;buf=[];sum=0}
+    var c=CMAP[i.cat]||CMAP.other;sum+=i.amt;
+    buf.push('<button class="row" data-id="'+i.id+'"><span class="badge" style="background:var('+c.c+')">'+c.n[0]+'</span><span class="t"><b>'+c.n+'</b><span>'+esc(i.note||'')+'</span></span><span class="num">'+fmt(i.amt)+'</span></button>');
+  });
+  flush();
+  $('list').innerHTML=html;
+}
+function esc(s){return String(s).replace(/[&<>"]/g,function(c){return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]})}
+
+var tt;function toast(m){var t=$('toast');t.textContent=m;t.hidden=false;clearTimeout(tt);tt=setTimeout(function(){t.hidden=true},1800)}
+
+// entry sheet
+var pickCat='food';
+function drawPicks(){
+  $('fCats').innerHTML=CATS.map(function(c){return '<button type="button" class="pick" data-cat="'+c.id+'" aria-pressed="'+(c.id===pickCat)+'"><span class="badge" style="background:var('+c.c+')">'+c.n[0]+'</span>'+c.n+'</button>'}).join('');
+}
+function openEntry(item){
+  editing=item||null;
+  $('entryTitle').textContent=item?'編輯':'記一筆';
+  $('fAmt').value=item?item.amt:'';
+  pickCat=item?item.cat:(filter||pickCat);
+  var isCur=view.y===today.getFullYear()&&view.m===today.getMonth();
+  $('fDate').value=item?item.date:(isCur?ymd(today):ymd(new Date(view.y,view.m,1)));
+  $('fNote').value=item?item.note:'';
+  $('fDel').hidden=!item; $('fDel').dataset.armed='';$('fDel').textContent='刪除';
+  $('fErr').textContent='';
+  drawPicks();
+  $('entryScrim').hidden=false;
+  if(!item)setTimeout(function(){$('fAmt').focus()},60);
+}
+function closeEntry(){$('entryScrim').hidden=true;editing=null}
+
+$('add').onclick=function(){openEntry()};
+$('closeEntry').onclick=closeEntry;
+$('entryScrim').addEventListener('click',function(e){if(e.target===this)closeEntry()});
+$('fCats').addEventListener('click',function(e){var b=e.target.closest('.pick');if(!b)return;pickCat=b.dataset.cat;drawPicks()});
+$('entryForm').addEventListener('submit',function(e){
+  e.preventDefault();
+  var raw=$('fAmt').value.replace(/[,\s]/g,'');
+  // allow simple sums like 120+85
+  var amt=NaN;
+  if(/^[\d.+]+$/.test(raw)){amt=raw.split('+').reduce(function(s,x){return s+(parseFloat(x)||0)},0)}
+  if(!(amt>0)){$('fErr').textContent='請輸入大於 0 的金額，可用 + 合計，例如 120+85';return}
+  var date=$('fDate').value||ymd(today);
+  var rec={amt:Math.round(amt*100)/100,cat:pickCat,date:date,note:$('fNote').value.trim()};
+  if(editing){Object.assign(editing,rec);delete editing.ex}
+  else{rec.id=uid();rec.ts=Date.now();state.items.push(rec)}
+  save();
+  var wasEdit=!!editing;
+  var d=new Date(date+'T00:00:00');view={y:d.getFullYear(),m:d.getMonth()};
+  closeEntry();render();toast(wasEdit?'已更新':'已記下 '+fmt(rec.amt)+' 元');
+});
+$('fDel').onclick=function(){
+  var b=this;
+  if(!b.dataset.armed){b.dataset.armed='1';b.textContent='再按一次確認刪除';return}
+  state.items=state.items.filter(function(i){return i!==editing});
+  save();closeEntry();render();toast('已刪除');
+};
+$('list').addEventListener('click',function(e){
+  var r=e.target.closest('.row');if(!r)return;
+  var it=state.items.find(function(i){return i.id===r.dataset.id});if(it)openEntry(it);
+});
+$('cats').addEventListener('click',function(e){
+  var b=e.target.closest('.cat');if(!b)return;
+  filter=filter===b.dataset.cat?null:b.dataset.cat;render();
+});
+$('clearFilter').onclick=function(){filter=null;render()};
+$('prev').onclick=function(){var d=new Date(view.y,view.m-1,1);view={y:d.getFullYear(),m:d.getMonth()};filter=null;render()};
+$('next').onclick=function(){var d=new Date(view.y,view.m+1,1);view={y:d.getFullYear(),m:d.getMonth()};filter=null;render()};
+$('clearEx').onclick=function(){state.items=state.items.filter(function(i){return !i.ex});save();render();toast('已清除範例資料')};
+
+// settings
+$('openSet').onclick=function(){$('sBudget').value=state.budget||'';$('io').value='';$('wipeBtn').dataset.armed='';$('wipeBtn').textContent='刪除全部資料';$('setScrim').hidden=false};
+$('closeSet').onclick=function(){$('setScrim').hidden=true};
+$('setScrim').addEventListener('click',function(e){if(e.target===this)this.hidden=true});
+$('saveBudget').onclick=function(){var v=parseInt($('sBudget').value.replace(/\D/g,''),10);state.budget=v>0?v:0;save();render();toast(v>0?'預算設為 '+fmt(v):'已取消預算')};
+function copy(text,msg){
+  var ta=$('io');ta.value=text;
+  try{navigator.clipboard.writeText(text).then(function(){toast(msg)},function(){ta.select();toast('請長按文字框選取後複製')})}
+  catch(e){ta.select();toast('請長按文字框選取後複製')}
+}
+$('exportBtn').onclick=function(){copy(JSON.stringify({app:'日日記帳',v:1,budget:state.budget,items:state.items}),'備份已複製')};
+$('csvBtn').onclick=function(){
+  var rows=itemsOf(view.y,view.m).sort(function(a,b){return a.date<b.date?-1:1});
+  var csv='日期,分類,金額,備註\n'+rows.map(function(i){return [i.date,(CMAP[i.cat]||CMAP.other).n,i.amt,'"'+(i.note||'').replace(/"/g,'""')+'"'].join(',')}).join('\n');
+  copy(csv,view.m+1+' 月 CSV 已複製');
+};
+$('importBtn').onclick=function(){
+  try{
+    var d=JSON.parse($('io').value);
+    if(!d||!Array.isArray(d.items))throw 0;
+    var ids={};state.items.forEach(function(i){ids[i.id]=1});
+    var n=0;d.items.forEach(function(i){if(i&&i.id&&!ids[i.id]&&i.amt>0&&/^\d{4}-\d\d-\d\d$/.test(i.date)){state.items.push(i);n++}});
+    if(d.budget)state.budget=d.budget;
+    save();render();toast('匯入 '+n+' 筆');
+  }catch(e){toast('內容格式不對，請貼上「複製備份」產生的文字')}
+};
+$('wipeBtn').onclick=function(){
+  var b=this;
+  if(!b.dataset.armed){b.dataset.armed='1';b.textContent='再按一次確認刪除全部';return}
+  state.items=[];save();render();$('setScrim').hidden=true;toast('已刪除全部資料');
+};
+
+load();render();
+})();
+</script>
+
+<script>
+if('serviceWorker' in navigator){window.addEventListener('load',function(){navigator.serviceWorker.register('sw.js').catch(function(){})})}
+</script>
+</body>
+</html>
